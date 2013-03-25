@@ -85,7 +85,7 @@ popd
 
 for arch in $ARCHS ; do
     pushd $PREFIX/$PLATFORM/$RELEASE/$arch
-        rm -f *.repo
+        find . -type f -name "*.repo" -exec rm {} \;
         createrepo .
     popd
     TEMP=$(mktemp -d)
