@@ -45,6 +45,10 @@ autorelease () {
 
 }
 
+# Mer release is the same for everything as everything builds against same target 
+# Each of our repos have armv7hl build so it is safe to assume that it is found.
+MER_RELEASE=$(wget -qO- https://api.merproject.org/public/source/mer:$LEVEL/_meta | sed -ne '/<repository name="latest_armv7hl">/,/repository=/p' | grep path | awk '{ split($2,a,"\""); split(a[2],b,":"); print b[5] }')
+
 if [[ $LEVEL = "devel" ]]; then
     levelsuffix="devel:/"
 elif [[ $LEVEL = "testing" ]]; then
@@ -106,12 +110,16 @@ for arch in $ARCHS ; do
     rm $PREFIX/$PLATFORM/$RELEASE/$arch/repodata/patterns.xml
     rm -rf $TEMP
 
+    # Mark the mer id this repo was build against
+    echo $MER_RELEASE > $PREFIX/$PLATFORM/$RELEASE/mer.id
+
     # echo "Signing $arch repo with releases key ..."
     # $REPO_SIGN_COMMAND $PREFIX/$PLATFORM/$RELEASE/$arch/repodata/repomd.xml
 done
 
 # Check HW Adaptation repos.
 ADAPTATIONS="ti:/omap3:/n900 ti:/omap3:/n9xx-common ti:/omap3:/n950-n9 ti:/omap4:/pandaboard x86:/x86-common"
+ADAPTATIONS="ti:/omap3:/n9xx-common"
 
 for prj in $ADAPTATIONS ; do
     for arch in $ARCHS ; do
@@ -140,11 +148,13 @@ for prj in $ADAPTATIONS ; do
         rm $PREFIX/hw/${prj//:/}/$RELEASE/$arch/repodata/patterns.xml
         rm -r $TEMP
    done
+
+   # Mark the mer id this was build against
+   echo $MER_RELEASE > $PREFIX/hw/${prj//:/}/$RELEASE/mer.id
+   
    pushd $PREFIX/hw/${prj//:/}
    rm -f latest
    ln -sf $RELEASE latest
    popd
 done
-
-
 
