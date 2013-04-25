@@ -45,7 +45,6 @@ autorelease () {
 
 }
 
-
 if [[ $LEVEL = "devel" ]]; then
     levelsuffix="devel:/"
 elif [[ $LEVEL = "testing" ]]; then
@@ -62,6 +61,7 @@ autorelease
 PRJS="mw ux apps"
 EXCLUDES="--exclude /repocache/ --exclude /repodata/"
 
+# Get the data from the repository OBS has published
 for prj in $PRJS ; do
     for arch in $ARCHS ; do
         if [ ! -d "$SRCPREFIX/$levelsuffix/$prj/latest_$arch" ]; then
@@ -78,16 +78,19 @@ done
 
 echo "This snapshot was made from $LEVEL projects $PRJS" > $PREFIX/$PLATFORM/$RELEASE/README
 
+# Make this the new release
 pushd $PREFIX/$PLATFORM
 rm -f latest
 ln -sf $RELEASE latest
 popd
 
 for arch in $ARCHS ; do
+    # Drop OBS .repo files and create repository metadata
     pushd $PREFIX/$PLATFORM/$RELEASE/$arch
         find . -type f -name "*.repo" -exec rm {} \;
         createrepo .
     popd
+    # Extract the patterns from rpm's
     TEMP=$(mktemp -d)
     pushd $TEMP
         PATTERNS=`find $PREFIX/$PLATFORM/$RELEASE/$arch/ -name 'patterns*.noarch.rpm'`
