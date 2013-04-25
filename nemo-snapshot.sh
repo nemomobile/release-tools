@@ -52,6 +52,30 @@ autorelease () {
 
 }
 
+function update_repo_meta {
+    REPO_DIR=$1
+    # Drop OBS .repo files and create repository metadata
+    pushd $REPO_DIR
+        find . -type f -name "*.repo" -exec rm {} \;
+        createrepo .
+    popd
+    # Extract the patterns from rpm's
+    TEMP=$(mktemp -d)
+    pushd $TEMP
+        PATTERNS=`find $REPO_DIR/ -name 'patterns*.noarch.rpm'`
+        for pattern in $PATTERNS ; do
+            rpm2cpio $pattern | cpio -uidv
+        done
+        COUNT=$(find . -type f -name "*.xml" | wc -l)
+        echo "<patterns count=\"$COUNT\">" >  $REPO_DIR/repodata/patterns.xml
+        find . -type f -name "*.xml" -exec cat {} + >> $REPO_DIR/repodata/patterns.xml
+        echo "</patterns>" >>  $REPO_DIR/repodata/patterns.xml
+        modifyrepo $REPO_DIR/repodata/patterns.xml $REPO_DIR/repodata
+    popd
+    rm $REPO_DIR/repodata/patterns.xml
+    rm -rf $TEMP
+}
+
 # Mer release is the same for everything as everything builds against same target 
 # Each of our repos have armv7hl build so it is safe to assume that it is found.
 MER_RELEASE=$(wget -qO- https://api.merproject.org/public/source/mer:$LEVEL/_meta | sed -ne '/<repository name="latest_armv7hl">/,/repository=/p' | grep path | awk '{ split($2,a,"\""); split(a[2],b,":"); print b[5] }')
@@ -96,26 +120,7 @@ ln -sf $RELEASE latest
 popd
 
 for arch in $ARCHS ; do
-    # Drop OBS .repo files and create repository metadata
-    pushd $PREFIX/$PLATFORM/$RELEASE/$arch
-        find . -type f -name "*.repo" -exec rm {} \;
-        createrepo .
-    popd
-    # Extract the patterns from rpm's
-    TEMP=$(mktemp -d)
-    pushd $TEMP
-        PATTERNS=`find $PREFIX/$PLATFORM/$RELEASE/$arch/ -name 'patterns*.noarch.rpm'`
-        for pattern in $PATTERNS ; do
-            rpm2cpio $pattern | cpio -uidv
-        done
-        COUNT=$(find . -type f -name "*.xml" | wc -l)
-        echo "<patterns count=\"$COUNT\">" >  $PREFIX/$PLATFORM/$RELEASE/$arch/repodata/patterns.xml
-        find . -type f -name "*.xml" -exec cat {} + >> $PREFIX/$PLATFORM/$RELEASE/$arch/repodata/patterns.xml
-        echo "</patterns>" >>  $PREFIX/$PLATFORM/$RELEASE/$arch/repodata/patterns.xml
-        modifyrepo $PREFIX/$PLATFORM/$RELEASE/$arch/repodata/patterns.xml $PREFIX/$PLATFORM/$RELEASE/$arch/repodata
-    popd
-    rm $PREFIX/$PLATFORM/$RELEASE/$arch/repodata/patterns.xml
-    rm -rf $TEMP
+    update_repo_meta $PREFIX/$PLATFORM/$RELEASE/$arch/
 
     # Mark the mer id this repo was build against
     echo $MER_RELEASE > $PREFIX/$PLATFORM/$RELEASE/mer.id
@@ -135,25 +140,9 @@ for prj in $ADAPTATIONS ; do
             continue
         fi
         mkdir -p $PREFIX/hw/${prj//:/}/$RELEASE/$arch
-        $RSYNC_COMMAND $EXCLUDES $SRCPREFIX/"$levelsuffix"/hw:/"$prj"/latest_$arch/* $PREFIX/hw/${prj//:/}/$RELEASE/$arch
-        pushd $PREFIX/hw/${prj//:/}/$RELEASE/$arch
-            rm -f *.repo
-            createrepo .
-        popd
-        TEMP=$(mktemp -d)
-        pushd $TEMP
-            PATTERNS=`find $PREFIX/hw/${prj//:/}/$RELEASE/$arch/noarch/patterns*.noarch.rpm`
-            for pattern in $PATTERNS ; do
-                rpm2cpio $pattern | cpio -uidv
-            done
-            COUNT=$(find . -type f -name "*.xml" | wc -l)
-            echo "<patterns count=\"$COUNT\">" >  $PREFIX/hw/${prj//:/}/$RELEASE/$arch/repodata/patterns.xml
-            find . -type f -name "*.xml" -exec cat {} + >> $PREFIX/hw/${prj//:/}/$RELEASE/$arch/repodata/patterns.xml
-            echo "</patterns>" >>  $PREFIX/hw/${prj//:/}/$RELEASE/$arch/repodata/patterns.xml
-            modifyrepo $PREFIX/hw/${prj//:/}/$RELEASE/$arch/repodata/patterns.xml $PREFIX/hw/${prj//:/}/$RELEASE/$arch/repodata
-        popd
-        rm $PREFIX/hw/${prj//:/}/$RELEASE/$arch/repodata/patterns.xml
-        rm -r $TEMP
+        $RSYNC_COMMAND $EXCLUDES $SRCPREFIX/"$levelsuffix"/hw:/"$prj"/latest_$arch/* $PREFIX/hw/${prj//:/}/$RELEASE/$arch        
+
+        update_repo_meta $PREFIX/hw/${prj//:/}/$RELEASE/$arch/
    done
 
    # Mark the mer id this was build against
