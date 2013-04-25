@@ -1,5 +1,12 @@
 #!/bin/bash
 
+trap ctrl_c INT
+
+function ctrl_c() {
+  echo "User interrupted the script with ctrl+c"
+  exit 1
+}
+
 LEVEL=$1
 
 [[ x$LEVEL = x ]] && echo "need level" && exit 1
