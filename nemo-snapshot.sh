@@ -14,9 +14,10 @@ LEVEL=$1
 umask "u=rwx,g=rwx,o=rx"
 
 PREFIX="/data/obs/repos/releases.nemomobile.org/snapshots/repos/"
+#PREFIX="/data/sage/test"
 SRCPREFIX="/srv/obs/repos/repo.merproject.org/obs/nemo:/"
 RSYNC_PASSWORD=
-RSYNC_COMMAND="rsync --progress -m -rltOHxd"
+RSYNC_COMMAND="rsync -m -rltOHxd"
 #SIGNUSER=""
 #PASSPHRASEFILE="/root/.phrases/$SIGNUSER"
 #REPO_SIGN_COMMAND="gpg2 --batch --no-tty --local-user $SIGNUSER --passphrase-file $PASSPHRASEFILE --detach-sign --armor"
@@ -54,24 +55,25 @@ autorelease () {
 
 function update_repo_meta {
     REPO_DIR=$1
+    echo "Updating meta for $REPO_DIR.."
     # Drop OBS .repo files and create repository metadata
-    pushd $REPO_DIR
+    pushd $REPO_DIR &> /dev/null
         find . -type f -name "*.repo" -exec rm {} \;
-        createrepo .
-    popd
+        createrepo . &> /dev/null
+    popd &> /dev/null
     # Extract the patterns from rpm's
     TEMP=$(mktemp -d)
-    pushd $TEMP
+    pushd $TEMP &> /dev/null
         PATTERNS=`find $REPO_DIR/ -name 'patterns*.noarch.rpm'`
         for pattern in $PATTERNS ; do
-            rpm2cpio $pattern | cpio -uidv
+            rpm2cpio $pattern | cpio -uid &> /dev/null
         done
         COUNT=$(find . -type f -name "*.xml" | wc -l)
         echo "<patterns count=\"$COUNT\">" >  $REPO_DIR/repodata/patterns.xml
         find . -type f -name "*.xml" -exec cat {} + >> $REPO_DIR/repodata/patterns.xml
         echo "</patterns>" >>  $REPO_DIR/repodata/patterns.xml
-        modifyrepo $REPO_DIR/repodata/patterns.xml $REPO_DIR/repodata
-    popd
+        modifyrepo $REPO_DIR/repodata/patterns.xml $REPO_DIR/repodata &> /dev/null
+    popd &> /dev/null
     rm $REPO_DIR/repodata/patterns.xml
     rm -rf $TEMP
 }
@@ -100,9 +102,9 @@ EXCLUDES="--exclude /repocache/ --exclude /repodata/"
 for prj in $PRJS ; do
     for arch in $ARCHS ; do
         if [ ! -d "$SRCPREFIX/$levelsuffix/$prj/latest_$arch" ]; then
-            echo "Dir doesn't exist: $SRCPREFIX/$levelsuffix/$prj/latest_$arch"
             continue
         fi
+        echo "Copying files from $SRCPREFIX/$levelsuffix/$prj/latest_$arch/ to $PREFIX/$PLATFORM/$RELEASE/$arch/$prj/.."
         mkdir -p $PREFIX/$PLATFORM/$RELEASE/$arch/$prj/
         $RSYNC_COMMAND $EXCLUDES $SRCPREFIX/$levelsuffix/$prj/latest_$arch/* $PREFIX/$PLATFORM/$RELEASE/$arch/$prj/
     done
@@ -114,10 +116,10 @@ done
 echo "This snapshot was made from $LEVEL projects $PRJS" > $PREFIX/$PLATFORM/$RELEASE/README
 
 # Make this the new release
-pushd $PREFIX/$PLATFORM
+pushd $PREFIX/$PLATFORM &> /dev/null
 rm -f latest
 ln -sf $RELEASE latest
-popd
+popd &> /dev/null
 
 for arch in $ARCHS ; do
     update_repo_meta $PREFIX/$PLATFORM/$RELEASE/$arch/
@@ -131,16 +133,15 @@ done
 
 # Check HW Adaptation repos.
 ADAPTATIONS="ti:/omap3:/n900 ti:/omap3:/n9xx-common ti:/omap3:/n950-n9 ti:/omap4:/pandaboard x86:/x86-common"
-ADAPTATIONS="ti:/omap3:/n9xx-common"
 
 for prj in $ADAPTATIONS ; do
     for arch in $ARCHS ; do
         if [ ! -d $SRCPREFIX/$levelsuffix/hw:/$prj/latest_$arch ]; then
-            echo "Dir doesn't exist: $SRCPREFIX/$levelsuffix/hw:/$prj/latest_$arch"
             continue
         fi
         mkdir -p $PREFIX/hw/${prj//:/}/$RELEASE/$arch
-        $RSYNC_COMMAND $EXCLUDES $SRCPREFIX/"$levelsuffix"/hw:/"$prj"/latest_$arch/* $PREFIX/hw/${prj//:/}/$RELEASE/$arch        
+        echo "Copying files from $SRCPREFIX/$levelsuffix/hw:/$prj/latest_$arch/* to $PREFIX/hw/${prj//:/}/$RELEASE/$arch.."
+        $RSYNC_COMMAND $EXCLUDES $SRCPREFIX/$levelsuffix/hw:/$prj/latest_$arch/* $PREFIX/hw/${prj//:/}/$RELEASE/$arch        
 
         update_repo_meta $PREFIX/hw/${prj//:/}/$RELEASE/$arch/
    done
@@ -148,9 +149,9 @@ for prj in $ADAPTATIONS ; do
    # Mark the mer id this was build against
    echo $MER_RELEASE > $PREFIX/hw/${prj//:/}/$RELEASE/mer.id
    
-   pushd $PREFIX/hw/${prj//:/}
+   pushd $PREFIX/hw/${prj//:/} &> /dev/null
    rm -f latest
    ln -sf $RELEASE latest
-   popd
+   popd &> /dev/null
 done
 
